@@ -106,8 +106,8 @@ def save_stock_info(symbols):
         session.close()
 
 def fetch_stock_price(stock_id, symbol, start_date, end_date):
-    max_retries = 5
-    retry_delay = 10  # 10초 대기
+    max_retries = 3  # 재시도 횟수
+    retry_delay = 15  # 대기 시간을 15초로 증가 (VPN 사용시)
     
     for attempt in range(max_retries):
         try:
@@ -591,9 +591,9 @@ def fetch_stock_data(start_date, end_date, max_workers=1):
                 logger.error(f"종목 처리 오류 ({stock.name}): {e}")
                 failure_count += 1
             
-            # 각 종목 간 대기 시간 (API 제한 방지)
+            # 각 종목 간 대기 시간 (API 제한 방지) - VPN 사용시 더 길게
             if i < len(stocks) - 1:  # 마지막 종목이 아닌 경우
-                time.sleep(5)  # 5초 대기
+                time.sleep(10)  # 2초 → 10초로 증가 (VPN 사용시)
             
             # 10개마다 상태 보고
             if (i + 1) % 10 == 0:
@@ -624,7 +624,7 @@ def process_stock_data(stock_id, symbol, name, start_date, end_date):
     return f"{name}: 처리 완료 ({len(price_data)}개 데이터)"
 
 # 초기 데이터베이스 구축
-def build_initial_database(db, years=3):
+def build_initial_database(db, years=1, test_mode=False):
     today = datetime.now().date()
     start_date = (today - timedelta(days=365 * years)).strftime('%Y-%m-%d')
     end_date = today.strftime('%Y-%m-%d')
@@ -633,6 +633,12 @@ def build_initial_database(db, years=3):
     
     # 종목 정보 저장
     symbols = get_korean_stock_symbols()
+    
+    # 테스트 모드인 경우 소량 종목만 처리
+    if test_mode:
+        logger.info("테스트 모드: 상위 5개 종목만 처리합니다.")
+        symbols = symbols[:5]  # 20개 → 5개로 줄임
+    
     save_stock_info(symbols)
     
     # 주가 데이터 가져오기
