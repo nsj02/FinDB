@@ -11,6 +11,8 @@ import concurrent.futures
 from tqdm import tqdm
 from pykrx import stock
 import time
+from curl_cffi import requests
+import random
 
 logger = logging.getLogger(__name__)
 
@@ -106,66 +108,38 @@ def save_stock_info(symbols):
         session.close()
 
 def fetch_stock_price(stock_id, symbol, start_date, end_date):
-    max_retries = 3  # 재시도 횟수
-    retry_delay = 15  # 대기 시간을 15초로 증가 (VPN 사용시)
-    
-    for attempt in range(max_retries):
-        try:
-            # API 호출 간 대기 시간 (Too Many Requests 방지)
-            if attempt > 0:
-                wait_time = retry_delay * (2 ** attempt)
-                logger.info(f"{symbol} - 재시도 {attempt + 1}회, {wait_time}초 대기 중...")
-                time.sleep(wait_time)
-            
-            # 랜덤 User-Agent 사용
-            import random
-            import requests
-            
-            user_agents = [
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            ]
-            
-            # 세션 설정
-            session = requests.Session()
-            session.headers.update({
-                'User-Agent': random.choice(user_agents),
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'Accept-Encoding': 'gzip, deflate',
-                'Connection': 'keep-alive',
-                'Upgrade-Insecure-Requests': '1',
-            })
-            
-            # Yahoo Finance Ticker 생성
-            ticker = yf.Ticker(symbol)
-            ticker.session = session
-            
-            # 데이터 가져오기
-            df = ticker.history(start=start_date, end=end_date, auto_adjust=False)
-            
-            if df is None or df.empty:
-                if attempt == max_retries - 1:
-                    logger.warning(f"{symbol} - 최대 재시도 후에도 데이터 없음")
-                    return []
-                continue
-            
-            # 데이터 처리 성공
-            break
-            
-        except Exception as e:
-            if "Too Many Requests" in str(e) or "429" in str(e):
-                logger.warning(f"{symbol} - API 제한 오류: {e}")
-                if attempt == max_retries - 1:
-                    logger.error(f"{symbol} - 최대 재시도 후에도 API 제한 오류")
-                    return []
-                continue
-            else:
-                logger.error(f"{symbol} - 기타 오류: {e}")
-                if attempt == max_retries - 1:
-                    return []
-                continue
+    try:
+        # curl_cffi를 사용하여 브라우저 TLS 환경 모방
+        session = requests.Session(impersonate="chrome")
+        
+        # 추가적인 헤더 설정
+        session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+        })
+        
+        # yfinance에 세션 주입
+        ticker = yf.Ticker(symbol, session=session)
+        df = ticker.history(start=start_date, end=end_date, auto_adjust=False)
+        
+        if df is None or df.empty:
+            logger.warning(f"가격 데이터가 없습니다: {symbol}")
+            return []
+
+        # 1행짜리 Series인 경우 DataFrame으로 변환
+        if isinstance(df, pd.Series):
+            df = df.to_frame().T
+
+        # 데이터 처리 성공
+        logger.info(f"가격 데이터 가져오기 성공: {symbol}")
+        
+    except Exception as e:
+        logger.error(f"가격 데이터 가져오기 오류 ({symbol}): {e}")
+        return []
     
     # 데이터 처리
     try:
@@ -247,8 +221,19 @@ def fetch_and_save_market_indices(db, start_date, end_date):
         for market_name, symbol in indices.items():
             logger.info(f"{market_name} 지수 데이터 가져오는 중...")
             
-            # 야후 파이낸스에서 데이터 가져오기 (auto_adjust=False 명시)
-            df = yf.download(symbol, start=start_date, end=end_date, progress=False, auto_adjust=False)
+            # curl_cffi 세션을 사용하여 데이터 가져오기
+            session = requests.Session(impersonate="chrome")
+            session.headers.update({
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+            })
+            
+            # yfinance download에 세션 주입
+            df = yf.download(symbol, start=start_date, end=end_date, progress=False, auto_adjust=False, session=session)
             
             if df.empty:
                 logger.warning(f"{market_name} 지수 데이터가 없습니다.")
@@ -557,69 +542,75 @@ def save_market_stat(db, stat_data):
         new_stat = MarketStat(**stat_data)
         db.add(new_stat)
 
-# 주식 데이터 가져오기 (순차 처리 - API 제한 방지)
-def fetch_stock_data(start_date, end_date, max_workers=1):
+# 주식 데이터 가져오기 (병렬 처리 - Jupyter 노트북 방식)
+def fetch_stock_data(start_date, end_date, max_workers=5):  # 최적화된 워커 수
     session = Session()
     try:
+        # 모든 종목 가져오기
         stocks = session.query(Stock).all()
         
-        logger.info(f"총 {len(stocks)}개 종목을 순차 처리합니다 (API 제한 방지)")
+        logger.info(f"총 {len(stocks)}개 종목을 병렬 처리합니다")
         
-        success_count = 0
-        failure_count = 0
-        
-        for i, stock in enumerate(stocks):
-            logger.info(f"진행률: {i+1}/{len(stocks)} - {stock.name} ({stock.symbol}) 처리 중...")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = []
             
-            try:
-                result = process_stock_data(
-                    stock.stock_id,
-                    stock.symbol,
-                    stock.name,
-                    start_date,
-                    end_date
+            for stock in stocks:
+                futures.append(
+                    executor.submit(
+                        process_stock_data,
+                        stock.stock_id,
+                        stock.symbol,
+                        stock.name,
+                        start_date,
+                        end_date
+                    )
                 )
-                
-                if "처리 완료" in result:
-                    success_count += 1
-                    logger.info(f"✓ {stock.name} 처리 완료")
-                else:
+            
+            # 결과 처리
+            success_count = 0
+            failure_count = 0
+            
+            for future in tqdm(concurrent.futures.as_completed(futures), total=len(futures), desc="종목 데이터 처리"):
+                try:
+                    result = future.result()
+                    if "처리 완료" in result:
+                        success_count += 1
+                        logger.debug(f"종목 처리 완료: {result}")
+                    else:
+                        failure_count += 1
+                        logger.warning(f"종목 처리 실패: {result}")
+                except Exception as e:
                     failure_count += 1
-                    logger.warning(f"✗ {stock.name} 처리 실패: {result}")
-                    
-            except Exception as e:
-                logger.error(f"종목 처리 오류 ({stock.name}): {e}")
-                failure_count += 1
-            
-            # 각 종목 간 대기 시간 (API 제한 방지) - VPN 사용시 더 길게
-            if i < len(stocks) - 1:  # 마지막 종목이 아닌 경우
-                time.sleep(10)  # 2초 → 10초로 증가 (VPN 사용시)
-            
-            # 10개마다 상태 보고
-            if (i + 1) % 10 == 0:
-                logger.info(f"중간 보고 ({i+1}/{len(stocks)}): 성공 {success_count}, 실패 {failure_count}")
+                    logger.error(f"종목 처리 오류: {e}")
         
-        logger.info(f"데이터 처리 완료 - 성공: {success_count}, 실패: {failure_count}")
-        
-        if success_count == 0:
-            logger.error("모든 종목 처리 실패 - API 제한 또는 네트워크 문제")
+        logger.info(f"모든 종목 데이터 처리 완료 - 성공: {success_count}, 실패: {failure_count}")
         
     finally:
         session.close()
 
 # 단일 종목 데이터 처리
 def process_stock_data(stock_id, symbol, name, start_date, end_date):
+    logger.debug(f"종목 처리 시작: {name} ({symbol})")
+    
+    # 주가 데이터 가져오기
     price_data = fetch_stock_price(stock_id, symbol, start_date, end_date)
     
     if not price_data:
+        logger.warning(f"가격 데이터 없음: {name} ({symbol})")
         return f"{name}: 데이터 없음"
     
+    # 주가 데이터 저장
     save_result = save_price_data(stock_id, price_data)
     
     if not save_result:
+        logger.error(f"가격 데이터 저장 실패: {name} ({symbol})")
         return f"{name}: 저장 실패"
     
+    # 기술적 지표 계산 및 저장
     indicator_result = calculate_and_save_technical_indicators(stock_id)
+    
+    if not indicator_result:
+        logger.warning(f"기술적 지표 계산 실패: {name} ({symbol})")
     
     return f"{name}: 처리 완료 ({len(price_data)}개 데이터)"
 
