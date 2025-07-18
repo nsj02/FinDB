@@ -13,6 +13,8 @@ services:
       - ./init-db:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
+    networks:
+      - database-network
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
@@ -27,16 +29,16 @@ services:
       dockerfile: Dockerfile
     container_name: findb-database-server
     environment:
-      DATABASE_URL: postgresql://postgres:password@host.docker.internal:5432/finance_db
+      DATABASE_URL: postgresql://postgres:password@timescaledb:5432/finance_db
       PYTHONUNBUFFERED: "1"
     depends_on:
       timescaledb:
         condition: service_healthy
-    network_mode: "host"
+    networks:
+      - database-network
     restart: unless-stopped
     volumes:
       - ./logs:/app/logs
-    privileged: true
 
 volumes:
   timescale_data:
