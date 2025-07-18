@@ -1,7 +1,7 @@
 # run_update.py - 데이터베이스 업데이트 실행 스크립트
 
-from .models import Session, init_db
-from .data_importer import (
+from models import Session, init_db
+from data_importer import (
     build_initial_database, 
     update_daily_data, 
     update_full_technical_indicators,

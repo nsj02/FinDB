@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import numpy as np
 import yfinance as yf
-from sqlalchemy import create_engine, Column, Integer, String, Float, Date, ForeignKey, Boolean, Text, DateTime, UniqueConstraint, Index, BigInteger
+from sqlalchemy import create_engine, Column, Integer, String, Float, Date, ForeignKey, Boolean, Text, DateTime, Index, BigInteger
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy.sql import func, text
@@ -53,9 +53,8 @@ class Stock(Base):
 class DailyPrice(Base):
     __tablename__ = 'daily_prices'
     
-    price_id = Column(Integer, primary_key=True)
-    stock_id = Column(Integer, ForeignKey('stocks.stock_id', ondelete='CASCADE'), nullable=False)
-    date = Column(Date, nullable=False)
+    stock_id = Column(Integer, ForeignKey('stocks.stock_id', ondelete='CASCADE'), primary_key=True)
+    date = Column(Date, nullable=False, primary_key=True)
     open_price = Column(Float)
     high_price = Column(Float)
     low_price = Column(Float)
@@ -72,16 +71,15 @@ class DailyPrice(Base):
     
     # 인덱스 추가
     __table_args__ = (
-        UniqueConstraint('stock_id', 'date', name='uix_stock_date'),
         Index('ix_daily_prices_date', 'date'),
+        Index('ix_daily_prices_stock_id', 'stock_id'),
     )
 
 class TechnicalIndicator(Base):
     __tablename__ = 'technical_indicators'
     
-    indicator_id = Column(Integer, primary_key=True)
-    stock_id = Column(Integer, ForeignKey('stocks.stock_id', ondelete='CASCADE'), nullable=False)
-    date = Column(Date, nullable=False)
+    stock_id = Column(Integer, ForeignKey('stocks.stock_id', ondelete='CASCADE'), primary_key=True)
+    date = Column(Date, nullable=False, primary_key=True)
     
     # 이동평균선
     ma5 = Column(Float)
@@ -126,8 +124,8 @@ class TechnicalIndicator(Base):
     
     # 인덱스 추가
     __table_args__ = (
-        UniqueConstraint('stock_id', 'date', name='uix_stock_indicator_date'),
         Index('ix_tech_indicators_date', 'date'),
+        Index('ix_tech_indicators_stock_id', 'stock_id'),
         Index('ix_tech_indicators_rsi', 'rsi'),
         Index('ix_tech_indicators_volume_ratio', 'volume_ratio'),
     )
@@ -135,9 +133,8 @@ class TechnicalIndicator(Base):
 class MarketIndex(Base):
     __tablename__ = 'market_indices'
     
-    index_id = Column(Integer, primary_key=True)
-    market = Column(String(20), nullable=False, index=True)
-    date = Column(Date, nullable=False)
+    market = Column(String(20), nullable=False, primary_key=True)
+    date = Column(Date, nullable=False, primary_key=True)
     open_index = Column(Float)
     high_index = Column(Float)
     low_index = Column(Float)
@@ -150,16 +147,15 @@ class MarketIndex(Base):
     
     # 인덱스 추가
     __table_args__ = (
-        UniqueConstraint('market', 'date', name='uix_market_date'),
         Index('ix_market_indices_date', 'date'),
+        Index('ix_market_indices_market', 'market'),
     )
 
 class MarketStat(Base):
     __tablename__ = 'market_stats'
     
-    stat_id = Column(Integer, primary_key=True)
-    date = Column(Date, nullable=False)
-    market = Column(String(20), nullable=False)
+    market = Column(String(20), nullable=False, primary_key=True)
+    date = Column(Date, nullable=False, primary_key=True)
     rising_stocks = Column(Integer)
     falling_stocks = Column(Integer)
     unchanged_stocks = Column(Integer)
@@ -172,8 +168,8 @@ class MarketStat(Base):
     
     # 인덱스 추가
     __table_args__ = (
-        UniqueConstraint('market', 'date', name='uix_market_stat_date'),
         Index('ix_market_stats_date', 'date'),
+        Index('ix_market_stats_market', 'market'),
     )
 
 # TimescaleDB 하이퍼테이블 생성 함수
