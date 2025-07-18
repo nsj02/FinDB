@@ -41,7 +41,7 @@ RUN chmod +x /app/start.sh
 
 # 헬스체크
 HEALTHCHECK --interval=60s --timeout=30s --start-period=10s --retries=3 \
-    CMD python -c "from models import engine; engine.execute('SELECT 1')" || exit 1
+    CMD python -c "from models import Session; session = Session(); session.execute('SELECT 1'); session.close()" || exit 1
 
 # 시작 스크립트 실행
 CMD ["/app/start.sh"]

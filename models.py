@@ -209,24 +209,51 @@ def create_hypertables():
         """))
         logger.info("market_stats 하이퍼테이블 생성 완료")
         
-        # 압축 정책 설정 (1개월 이상된 데이터는 압축)
-        session.execute(text("""
-            SELECT add_compression_policy('daily_prices', INTERVAL '1 month');
-        """))
+        # 압축 정책 설정 (columnstore 활성화 후 압축 정책 추가)
+        try:
+            # columnstore 활성화 시도
+            session.execute(text("""
+                ALTER TABLE daily_prices SET (timescaledb.compress, timescaledb.compress_segmentby = 'stock_id');
+            """))
+            session.execute(text("""
+                SELECT add_compression_policy('daily_prices', INTERVAL '1 month');
+            """))
+            logger.info("daily_prices 압축 정책 설정 완료")
+        except Exception as e:
+            logger.warning(f"daily_prices 압축 정책 설정 실패: {e}")
         
-        session.execute(text("""
-            SELECT add_compression_policy('technical_indicators', INTERVAL '1 month');
-        """))
+        try:
+            session.execute(text("""
+                ALTER TABLE technical_indicators SET (timescaledb.compress, timescaledb.compress_segmentby = 'stock_id');
+            """))
+            session.execute(text("""
+                SELECT add_compression_policy('technical_indicators', INTERVAL '1 month');
+            """))
+            logger.info("technical_indicators 압축 정책 설정 완료")
+        except Exception as e:
+            logger.warning(f"technical_indicators 압축 정책 설정 실패: {e}")
         
-        session.execute(text("""
-            SELECT add_compression_policy('market_indices', INTERVAL '1 month');
-        """))
+        try:
+            session.execute(text("""
+                ALTER TABLE market_indices SET (timescaledb.compress, timescaledb.compress_segmentby = 'market');
+            """))
+            session.execute(text("""
+                SELECT add_compression_policy('market_indices', INTERVAL '1 month');
+            """))
+            logger.info("market_indices 압축 정책 설정 완료")
+        except Exception as e:
+            logger.warning(f"market_indices 압축 정책 설정 실패: {e}")
         
-        session.execute(text("""
-            SELECT add_compression_policy('market_stats', INTERVAL '1 month');
-        """))
-        
-        logger.info("데이터 압축 정책 설정 완료")
+        try:
+            session.execute(text("""
+                ALTER TABLE market_stats SET (timescaledb.compress, timescaledb.compress_segmentby = 'market');
+            """))
+            session.execute(text("""
+                SELECT add_compression_policy('market_stats', INTERVAL '1 month');
+            """))
+            logger.info("market_stats 압축 정책 설정 완료")
+        except Exception as e:
+            logger.warning(f"market_stats 압축 정책 설정 실패: {e}")
         
         session.commit()
         logger.info("TimescaleDB 하이퍼테이블 설정이 완료되었습니다.")
