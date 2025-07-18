@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  # TimescaleDB 데이터베이스
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: findb-timescaledb
+    environment:
+      POSTGRES_DB: finance_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      TIMESCALEDB_TELEMETRY: off
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    networks:
+      - database-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 데이터베이스 서버 (데이터 수집 및 저장)
+  database-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: findb-database-server
+    environment:
+      DATABASE_URL: postgresql://postgres:password@timescaledb:5432/finance_db
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    networks:
+      - database-network
+    restart: unless-stopped
+    volumes:
+      - ./logs:/app/logs
+
+volumes:
+  timescale_data:
+
+networks:
+  database-network:
+    driver: bridge
