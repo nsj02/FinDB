@@ -20,7 +20,7 @@ def run_task(task: str, **kwargs):
         if task == "init":
             print("데이터베이스 초기화를 시작합니다...")
             init_db()  # 테이블 생성
-            build_initial_database(db, years=kwargs.get('years', 1), test_mode=kwargs.get('test_mode', False))
+            build_initial_database(db, years=kwargs.get('years', 2), test_mode=kwargs.get('test_mode', False))  # 기본 2년으로 변경
             print("초기화 완료.")
         elif task == "test":
             print("테스트 모드로 데이터베이스 초기화를 시작합니다...")
@@ -47,7 +47,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         task_name = sys.argv[1]
         if task_name == "init":
-            years = int(sys.argv[2]) if len(sys.argv) > 2 else 1  # 기본값 3년 → 1년으로 변경
+            years = int(sys.argv[2]) if len(sys.argv) > 2 else 2  # 기본값 2년으로 변경
             run_task("init", years=years)
         elif task_name == "test":
             years = int(sys.argv[2]) if len(sys.argv) > 2 else 1
@@ -57,11 +57,11 @@ if __name__ == "__main__":
             run_task("update", days=days)
         else:
             print("사용법:")
-            print("  python run_update.py init [years]    # 데이터베이스 초기화 (기본: 1년)")
+            print("  python run_update.py init [years]    # 데이터베이스 초기화 (기본: 2년)")
             print("  python run_update.py test [years]    # 테스트 모드 (상위 20개 종목, 기본: 1년)")
             print("  python run_update.py update [days]   # 데이터 업데이트 (기본: 2일)")
     else:
         print("사용법:")
-        print("  python run_update.py init [years]    # 데이터베이스 초기화 (기본: 1년)")
+        print("  python run_update.py init [years]    # 데이터베이스 초기화 (기본: 2년)")
         print("  python run_update.py test [years]    # 테스트 모드 (상위 20개 종목, 기본: 1년)")
         print("  python run_update.py update [days]   # 데이터 업데이트 (기본: 2일)")
